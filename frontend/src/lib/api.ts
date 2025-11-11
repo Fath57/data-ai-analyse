@@ -12,9 +12,19 @@ export const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // Get token from localStorage (Zustand persist)
+    if (typeof window !== 'undefined') {
+      try {
+        const authStorage = localStorage.getItem('auth-storage');
+        if (authStorage) {
+          const { state } = JSON.parse(authStorage);
+          if (state?.accessToken) {
+            config.headers.Authorization = `Bearer ${state.accessToken}`;
+          }
+        }
+      } catch (error) {
+        console.error('Error getting auth token:', error);
+      }
     }
     return config;
   },
@@ -28,9 +38,11 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      // Handle token refresh or redirect to login
-      localStorage.removeItem('access_token');
-      window.location.href = '/login';
+      // Clear auth and redirect to login
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth-storage');
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -41,7 +53,11 @@ export const authAPI = {
   login: (credentials: { email: string; password: string }) =>
     api.post('/auth/login', credentials),
   register: (userData: any) => api.post('/auth/register', userData),
-  logout: () => api.post('/auth/logout'),
+  logout: (refreshToken?: string) => api.post('/auth/logout', { refreshToken }),
+  refresh: (refreshToken: string) => api.post('/auth/refresh', { refreshToken }),
+  getMe: () => api.get('/auth/me'),
+  changePassword: (oldPassword: string, newPassword: string) =>
+    api.post('/auth/change-password', { oldPassword, newPassword }),
 };
 
 export const projectsAPI = {
